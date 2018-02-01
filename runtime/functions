@@ -185,7 +185,7 @@ initialize_database() {
         ;;
       *)
         echo "Initializing database..."
-        PG_OLD_VERSION=$(find ${PG_HOME}/[0-9].[0-9]/main -maxdepth 1 -name PG_VERSION 2>/dev/null | grep -v $PG_VERSION | sort -r | head -n1 | cut -d'/' -f5)
+        PG_OLD_VERSION=$(find ${PG_HOME}/*/data -maxdepth 1 -name PG_VERSION 2>/dev/null | grep -v $PG_VERSION | sort -r | head -n1 | cut -d'/' -f5)
         if [[ -n ${PG_OLD_VERSION} ]]; then
           echo "‣ Migrating PostgreSQL ${PG_OLD_VERSION} data to ${PG_VERSION}..."
 
@@ -193,7 +193,7 @@ initialize_database() {
           mv ${PG_HOME}/${PG_OLD_VERSION} ${PG_HOME}/${PG_OLD_VERSION}.migrating
 
           echo "‣ Installing PostgreSQL ${PG_OLD_VERSION}..."
-          if ! ( apt-get update &&  DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${PG_OLD_VERSION} postgresql-client-${PG_OLD_VERSION} ) >/dev/null; then
+          if ! ( apt-get update &&  DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${PG_OLD_VERSION} postgresql-client-${PG_OLD_VERSION} ); then
             echo "ERROR! Failed to install PostgreSQL ${PG_OLD_VERSION}. Exiting..."
             # first move the old data back
             rm -rf ${PG_HOME}/${PG_OLD_VERSION}
@@ -212,11 +212,11 @@ initialize_database() {
         fi
 
         exec_as_postgres ${PG_BINDIR}/initdb --pgdata=${PG_DATADIR} \
-          --username=${PG_USER} --encoding=unicode --auth=trust ${PG_PASSWORD:+--pwfile=/tmp/pwfile} >/dev/null
+          --username=${PG_USER} --encoding=unicode --auth=trust ${PG_PASSWORD:+--pwfile=/tmp/pwfile}
 
         if [[ -n ${PG_OLD_VERSION} ]]; then
           PG_OLD_BINDIR=/usr/lib/postgresql/${PG_OLD_VERSION}/bin
-          PG_OLD_DATADIR=${PG_HOME}/${PG_OLD_VERSION}/main
+          PG_OLD_DATADIR=${PG_HOME}/${PG_OLD_VERSION}/data
           PG_OLD_CONF=${PG_OLD_DATADIR}/postgresql.conf
           PG_OLD_HBA_CONF=${PG_OLD_DATADIR}/pg_hba.conf
           PG_OLD_IDENT_CONF=${PG_OLD_DATADIR}/pg_ident.conf
@@ -226,7 +226,7 @@ initialize_database() {
             -b ${PG_OLD_BINDIR} -B ${PG_BINDIR} \
             -d ${PG_OLD_DATADIR} -D ${PG_DATADIR} \
             -o "-c config_file=${PG_OLD_CONF} --hba_file=${PG_OLD_HBA_CONF} --ident_file=${PG_OLD_IDENT_CONF}" \
-            -O "-c config_file=${PG_CONF} --hba_file=${PG_HBA_CONF} --ident_file=${PG_IDENT_CONF}" >/dev/null
+            -O "-c config_file=${PG_CONF} --hba_file=${PG_HBA_CONF} --ident_file=${PG_IDENT_CONF}"
           echo
         fi
         ;;
@@ -297,7 +297,7 @@ create_user() {
         fi
         echo "Creating database user: ${DB_USER}"
         if [[ -z $(psql -U ${PG_USER} -Atc "SELECT 1 FROM pg_catalog.pg_user WHERE usename = '${DB_USER}'";) ]]; then
-          psql -U ${PG_USER} -c "CREATE ROLE \"${DB_USER}\" with LOGIN CREATEDB PASSWORD '${DB_PASS}';" >/dev/null
+          psql -U ${PG_USER} -c "CREATE ROLE \"${DB_USER}\" with LOGIN CREATEDB PASSWORD '${DB_PASS}';"
         fi
         ;;
     esac
@@ -314,12 +314,12 @@ load_extensions() {
     echo "  Please migrate to using DB_EXTENSION"
     echo
     echo "‣ Loading unaccent extension..."
-    psql -U ${PG_USER} -d ${database} -c "CREATE EXTENSION IF NOT EXISTS unaccent;" >/dev/null 2>&1
+    psql -U ${PG_USER} -d ${database} -c "CREATE EXTENSION IF NOT EXISTS unaccent;"
   fi
 
   for extension in $(awk -F',' '{for (i = 1 ; i <= NF ; i++) print $i}' <<< "${DB_EXTENSION}"); do
     echo "‣ Loading ${extension} extension..."
-    psql -U ${PG_USER} -d ${database} -c "CREATE EXTENSION IF NOT EXISTS ${extension};" >/dev/null 2>&1
+    psql -U ${PG_USER} -d ${database} -c "CREATE EXTENSION IF NOT EXISTS ${extension};"
   done
 }
 
@@ -333,14 +333,14 @@ create_database() {
         for database in $(awk -F',' '{for (i = 1 ; i <= NF ; i++) print $i}' <<< "${DB_NAME}"); do
           echo "Creating database: ${database}..."
           if [[ -z $(psql -U ${PG_USER} -Atc "SELECT 1 FROM pg_catalog.pg_database WHERE datname = '${database}'";) ]]; then
-            psql -U ${PG_USER} -c "CREATE DATABASE \"${database}\" WITH TEMPLATE = \"${DB_TEMPLATE}\";" >/dev/null
+            psql -U ${PG_USER} -c "CREATE DATABASE \"${database}\" WITH TEMPLATE = \"${DB_TEMPLATE}\";"
           fi
 
           load_extensions ${database}
 
           if [[ -n ${DB_USER} ]]; then
             echo "‣ Granting access to ${DB_USER} user..."
-            psql -U ${PG_USER} -c "GRANT ALL PRIVILEGES ON DATABASE \"${database}\" to \"${DB_USER}\";" >/dev/null
+            psql -U ${PG_USER} -c "GRANT ALL PRIVILEGES ON DATABASE \"${database}\" to \"${DB_USER}\";"
           fi
         done
         ;;
@@ -360,7 +360,7 @@ create_replication_user() {
 
         echo "Creating replication user: ${REPLICATION_USER}"
         if [[ -z $(psql -U ${PG_USER} -Atc "SELECT 1 FROM pg_catalog.pg_user WHERE usename = '${REPLICATION_USER}'";) ]]; then
-          psql -U ${PG_USER} -c "CREATE ROLE \"${REPLICATION_USER}\" WITH REPLICATION LOGIN ENCRYPTED PASSWORD '${REPLICATION_PASS}';" >/dev/null
+          psql -U ${PG_USER} -c "CREATE ROLE \"${REPLICATION_USER}\" WITH REPLICATION LOGIN ENCRYPTED PASSWORD '${REPLICATION_PASS}';"
         fi
 
         set_hba_param "host replication ${REPLICATION_USER} 0.0.0.0/0 md5"
@@ -373,19 +373,19 @@ configure_postgresql() {
   initialize_database
   configure_recovery
   configure_ssl
-
+  
   # start postgres server internally for the creation of users and databases
   rm -rf ${PG_DATADIR}/postmaster.pid
   set_postgresql_param "listen_addresses" "127.0.0.1" quiet
-  exec_as_postgres ${PG_BINDIR}/pg_ctl -D ${PG_DATADIR} -w start >/dev/null
+  exec_as_postgres ${PG_BINDIR}/pg_ctl -D ${PG_DATADIR} -w start
 
   create_user
   create_database
   create_replication_user
 
   # stop the postgres server
-  exec_as_postgres ${PG_BINDIR}/pg_ctl -D ${PG_DATADIR} -w stop >/dev/null
+  exec_as_postgres ${PG_BINDIR}/pg_ctl -D ${PG_DATADIR} -w stop
 
   # listen on all interfaces
-  set_postgresql_param "listen_addresses" "*" quiet
+  set_postgresql_param "listen_addresses" "*"
 }
