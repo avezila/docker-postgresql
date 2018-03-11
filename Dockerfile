@@ -19,7 +19,7 @@ ENV REPLICATION_USER=repluser
 ENV REPLICATION_PASS="Monach2734&"
 
 ENV PATH="/opt/pgpro/std-10/bin:${PATH}"
-ENV DB_EXTENSION=pgcrypto,intarray,hstore,rum,jsquery
+ENV DB_EXTENSION=pgcrypto,intarray,hstore,rum,jsquery,pg_trgm,hunspell_en_us,hunspell_ru_ru,fuzzystrmatch,xml2
 
 COPY runtime/ ${PG_APP_HOME}/
 ADD ./tsearch_data/ /opt/pgpro/std-10/share/tsearch_data/
